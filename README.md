@@ -1,4 +1,4 @@
-# 🦌 DeerFlow - 2.0
+# 🦌 DeerFlow Autopilot
 
 English | [中文](./README_zh.md) | [日本語](./README_ja.md) | [Français](./README_fr.md) | [Русский](./README_ru.md)
 
@@ -9,12 +9,26 @@ English | [中文](./README_zh.md) | [日本語](./README_ja.md) | [Français](.
 <a href="https://trendshift.io/repositories/14699" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14699" alt="bytedance%2Fdeer-flow | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 > On February 28th, 2026, DeerFlow claimed the 🏆 #1 spot on GitHub Trending following the launch of version 2. Thanks a million to our incredible community — you made this happen! 💪🔥
 
+> [!IMPORTANT]
+> This repository is a personal fork and workflow adaptation of the upstream [bytedance/deer-flow](https://github.com/bytedance/deer-flow) project.
+> It keeps DeerFlow as the base system, then layers in local WSL-oriented startup scripts, broader workspace access, a project-root-aware prompt, and a persistent todo/commit/push workflow for day-to-day development.
+
 DeerFlow (**D**eep **E**xploration and **E**fficient **R**esearch **Flow**) is an open-source **super agent harness** that orchestrates **sub-agents**, **memory**, and **sandboxes** to do almost anything — powered by **extensible skills**.
+
+In this fork, the default operating model is tuned for local project work:
+
+- `gpt-5.4-mini` is the default workhorse model for most sessions.
+- `gpt-5.4` is the escalation path for complex reasoning and high-risk edits.
+- `glm-4.7` remains available as a fallback/comparison model.
+- `deerflow` is a repo-local launcher that works from any project directory and keeps logs under the DeerFlow repo root.
+- The agent is instructed to track `todo.md`, keep it current, and push completed work to the configured remote when a milestone is ready.
 
 https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
 
 > [!NOTE]
 > **DeerFlow 2.0 is a ground-up rewrite.** It shares no code with v1. If you're looking for the original Deep Research framework, it's maintained on the [`1.x` branch](https://github.com/bytedance/deer-flow/tree/main-1.x) — contributions there are still welcome. Active development has moved to 2.0.
+>
+> This fork follows the upstream 2.0 line, but adds local automation and workspace integration on top of it.
 
 ## Official Website
 
