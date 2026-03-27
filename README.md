@@ -1,5 +1,7 @@
 # DeerFlow Autopilot
 
+[English](./README_en.md) | 中文
+
 这是一个基于上游 DeerFlow 的个人 fork。
 
 - 上游项目：[bytedance/deer-flow](https://github.com/bytedance/deer-flow)
@@ -65,4 +67,3 @@ deerflow daemon
 ```bash
 ./deerflow
 ```
-
