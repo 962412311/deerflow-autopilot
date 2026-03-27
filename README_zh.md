@@ -1,6 +1,6 @@
 # 中文默认首页请看 [README.md](./README.md)
 
-如果你想看英文版，请点击 [English](./README_en.md)。
+If you want the English version, click [English](./README_en.md)。
 对于 HTTP/SSE MCP Server，还支持 OAuth token 流程（`client_credentials`、`refresh_token`）。
 详细说明见 [MCP Server 指南](backend/docs/MCP_SERVER.md)。
 
