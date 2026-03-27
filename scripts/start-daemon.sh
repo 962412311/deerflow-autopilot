@@ -15,6 +15,7 @@ cd "$REPO_ROOT"
 # ── Stop existing services ────────────────────────────────────────────────────
 
 echo "Stopping existing services if any..."
+pkill -f "langgraph_cli.cli dev" 2>/dev/null || true
 pkill -f "langgraph dev" 2>/dev/null || true
 pkill -f "uvicorn app.gateway.app:app" 2>/dev/null || true
 pkill -f "next dev" 2>/dev/null || true
@@ -57,6 +58,7 @@ fi
 
 cleanup_on_failure() {
     echo "Failed to start services, cleaning up..."
+    pkill -f "langgraph_cli.cli dev" 2>/dev/null || true
     pkill -f "langgraph dev" 2>/dev/null || true
     pkill -f "uvicorn app.gateway.app:app" 2>/dev/null || true
     pkill -f "next dev" 2>/dev/null || true

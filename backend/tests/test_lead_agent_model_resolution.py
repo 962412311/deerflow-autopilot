@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from deerflow.agents.lead_agent import agent as lead_agent_module
+from deerflow.agents.lead_agent import prompt as lead_prompt_module
 from deerflow.config.app_config import AppConfig
 from deerflow.config.model_config import ModelConfig
 from deerflow.config.sandbox_config import SandboxConfig
@@ -162,3 +163,20 @@ def test_create_summarization_middleware_uses_configured_model_alias(monkeypatch
     assert captured["name"] == "model-masswork"
     assert captured["thinking_enabled"] is False
     assert middleware["model"] is fake_model
+
+
+def test_apply_prompt_template_includes_project_workflow_context(monkeypatch):
+    monkeypatch.setenv("DEER_FLOW_PROJECT_ROOT", "/opt/projects/project-a")
+    monkeypatch.setattr(lead_prompt_module, "_get_memory_context", lambda agent_name=None: "")
+    monkeypatch.setattr(lead_prompt_module, "get_agent_soul", lambda agent_name: "")
+    monkeypatch.setattr(lead_prompt_module, "get_skills_prompt_section", lambda available_skills=None: "")
+    monkeypatch.setattr(lead_prompt_module, "get_deferred_tools_prompt_section", lambda: "")
+    monkeypatch.setattr(lead_prompt_module, "_build_acp_section", lambda: "")
+
+    prompt = lead_prompt_module.apply_prompt_template(subagent_enabled=False, max_concurrent_subagents=3, agent_name="tester")
+
+    assert "<project_context>" in prompt
+    assert "Current project root: `/opt/projects/project-a`" in prompt
+    assert "todo.md" in prompt
+    assert "git status" in prompt
+    assert "push it to the tracked remote automatically" in prompt

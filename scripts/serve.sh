@@ -36,6 +36,7 @@ fi
 # ── Stop existing services ────────────────────────────────────────────────────
 
 echo "Stopping existing services if any..."
+pkill -f "langgraph_cli.cli dev" 2>/dev/null || true
 pkill -f "langgraph dev" 2>/dev/null || true
 pkill -f "uvicorn app.gateway.app:app" 2>/dev/null || true
 pkill -f "next dev" 2>/dev/null || true
@@ -95,6 +96,7 @@ cleanup() {
     trap - INT TERM
     echo ""
     echo "Shutting down services..."
+    pkill -f "langgraph_cli.cli dev" 2>/dev/null || true
     pkill -f "langgraph dev" 2>/dev/null || true
     pkill -f "uvicorn app.gateway.app:app" 2>/dev/null || true
     pkill -f "next dev" 2>/dev/null || true

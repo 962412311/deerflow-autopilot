@@ -6,9 +6,11 @@ import pytest
 from deerflow.sandbox.tools import (
     VIRTUAL_PATH_PREFIX,
     _is_acp_workspace_path,
+    _is_allowed_local_host_path,
     _is_skills_path,
     _reject_path_traversal,
     _resolve_acp_workspace_path,
+    _resolve_local_tool_path,
     _resolve_and_validate_user_data_path,
     _resolve_skills_path,
     mask_local_paths_in_output,
@@ -127,6 +129,28 @@ def test_validate_local_tool_path_rejects_none_thread_data() -> None:
 
     with pytest.raises(SandboxRuntimeError):
         validate_local_tool_path(f"{VIRTUAL_PATH_PREFIX}/workspace/file.txt", None)
+
+
+def test_allowed_local_host_root_path_is_recognized(monkeypatch) -> None:
+    monkeypatch.setattr("deerflow.sandbox.tools._get_allowed_local_host_roots", lambda: [Path("/opt/projects")])
+    assert _is_allowed_local_host_path("/opt/projects/project-a/README.md") is True
+    assert _is_allowed_local_host_path("/opt/other/project-a/README.md") is False
+
+
+def test_validate_local_tool_path_allows_configured_host_root(monkeypatch) -> None:
+    monkeypatch.setattr("deerflow.sandbox.tools._get_allowed_local_host_roots", lambda: [Path("/opt/projects")])
+    validate_local_tool_path("/opt/projects/project-a/README.md", _THREAD_DATA)
+
+
+def test_validate_local_bash_command_paths_allows_configured_host_root(monkeypatch) -> None:
+    monkeypatch.setattr("deerflow.sandbox.tools._get_allowed_local_host_roots", lambda: [Path("/opt/projects")])
+    validate_local_bash_command_paths("cat /opt/projects/project-a/README.md", _THREAD_DATA)
+
+
+def test_resolve_local_tool_path_keeps_configured_host_root(monkeypatch) -> None:
+    monkeypatch.setattr("deerflow.sandbox.tools._get_allowed_local_host_roots", lambda: [Path("/opt/projects")])
+    resolved = _resolve_local_tool_path("/opt/projects/project-a/README.md", _THREAD_DATA)
+    assert resolved == str(Path("/opt/projects/project-a/README.md").resolve())
 
 
 # ---------- _resolve_skills_path ----------

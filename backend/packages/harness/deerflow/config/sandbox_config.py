@@ -23,6 +23,7 @@ class SandboxConfig(BaseModel):
         idle_timeout: Idle timeout in seconds before sandbox is released (default: 600 = 10 minutes). Set to 0 to disable.
         mounts: List of volume mounts to share directories with the container
         environment: Environment variables to inject into the container (values starting with $ are resolved from host env)
+        allowed_host_roots: Additional host filesystem roots allowed for local sandbox read/write access
     """
 
     use: str = Field(
@@ -56,6 +57,10 @@ class SandboxConfig(BaseModel):
     environment: dict[str, str] = Field(
         default_factory=dict,
         description="Environment variables to inject into the sandbox container. Values starting with $ will be resolved from host environment variables.",
+    )
+    allowed_host_roots: list[str] = Field(
+        default_factory=list,
+        description="Additional host filesystem roots allowed for local sandbox read/write access.",
     )
 
     model_config = ConfigDict(extra="allow")

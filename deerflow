@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: deerflow [command]
+
+Commands:
+  dev            Start the DeerFlow development server
+  start          Start the DeerFlow production server
+  daemon         Start the DeerFlow development server in the background
+  stop           Stop running DeerFlow services
+  check          Run dependency checks
+  install        Install backend and frontend dependencies
+  config         Generate config files if missing
+  config-upgrade Upgrade config.yaml to match config.example.yaml
+  root           Print the resolved DeerFlow repository root
+  project-root   Print the caller's current working directory
+  help           Show this help text
+EOF
+}
+
+find_repo_root() {
+    local candidate
+    local script_path
+    local script_dir
+
+    if [[ -n "${DEER_FLOW_REPO_ROOT:-}" ]]; then
+        candidate="${DEER_FLOW_REPO_ROOT}"
+        if [[ -f "$candidate/Makefile" && -d "$candidate/backend" && -d "$candidate/frontend" ]]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    fi
+
+    if [[ -n "${DEERFLOW_REPO_ROOT:-}" ]]; then
+        candidate="${DEERFLOW_REPO_ROOT}"
+        if [[ -f "$candidate/Makefile" && -d "$candidate/backend" && -d "$candidate/frontend" ]]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    fi
+
+    script_path="$(readlink -f "${BASH_SOURCE[0]}")"
+    script_dir="$(cd "$(dirname "$script_path")" && pwd)"
+    candidate="$script_dir"
+    if [[ -f "$candidate/Makefile" && -d "$candidate/backend" && -d "$candidate/frontend" ]]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    local dir="$PWD"
+    while true; do
+        if [[ -f "$dir/Makefile" && -d "$dir/backend" && -d "$dir/frontend" ]]; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+        [[ "$dir" == "/" ]] && break
+        dir="$(dirname "$dir")"
+    done
+
+    return 1
+}
+
+REPO_ROOT="$(find_repo_root)" || {
+    echo "Could not locate the DeerFlow repository root." >&2
+    echo "Set DEER_FLOW_HOME to the repo path, for example:" >&2
+    echo "  export DEER_FLOW_HOME=/path/to/deer-flow" >&2
+    exit 1
+}
+
+CALLER_CWD="$PWD"
+cd "$REPO_ROOT"
+export DEER_FLOW_CONFIG_PATH="${DEER_FLOW_CONFIG_PATH:-$REPO_ROOT/config.yaml}"
+export DEER_FLOW_PROJECT_ROOT="${DEER_FLOW_PROJECT_ROOT:-$CALLER_CWD}"
+
+if [[ -z "${DEER_FLOW_HOME:-}" && -z "${DEERFLOW_HOME:-}" ]]; then
+    export DEER_FLOW_HOME="$REPO_ROOT/backend/.deer-flow"
+fi
+
+if [[ $# -eq 0 ]]; then
+    set -- start
+fi
+
+case "${1:-}" in
+    dev)
+        exec make PYTHON=python3 dev
+        ;;
+    start)
+        exec make PYTHON=python3 start
+        ;;
+    daemon)
+        exec make PYTHON=python3 dev-daemon
+        ;;
+    stop)
+        exec make PYTHON=python3 stop
+        ;;
+    check)
+        exec make PYTHON=python3 check
+        ;;
+    install)
+        exec make PYTHON=python3 install
+        ;;
+    config)
+        exec make PYTHON=python3 config
+        ;;
+    config-upgrade)
+        exec make PYTHON=python3 config-upgrade
+        ;;
+    root)
+        printf '%s\n' "$REPO_ROOT"
+        ;;
+    project-root)
+        printf '%s\n' "$CALLER_CWD"
+        ;;
+    help|-h|--help)
+        usage
+        ;;
+    *)
+        echo "Unknown command: $1" >&2
+        echo >&2
+        usage >&2
+        exit 1
+        ;;
+esac

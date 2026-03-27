@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 from deerflow.config.agents_config import load_agent_soul
@@ -154,6 +155,8 @@ You are {agent_name}, an open-source super agent.
 
 {soul}
 {memory_context}
+
+{project_context}
 
 <thinking_style>
 - Think concisely and strategically about the user's request BEFORE taking action
@@ -368,6 +371,32 @@ def _get_memory_context(agent_name: str | None = None) -> str:
         return ""
 
 
+def _get_project_context() -> str:
+    """Get the caller's project root for injection into the system prompt."""
+    project_root = os.getenv("DEER_FLOW_PROJECT_ROOT") or os.getenv("DEERFLOW_PROJECT_ROOT")
+    if not project_root:
+        return ""
+    todo_path = f"{project_root.rstrip('/')}/todo.md"
+    allowed_roots_line = "You may read and write projects under the configured host roots."
+    try:
+        from deerflow.config import get_app_config
+
+        allowed_roots = [root for root in get_app_config().sandbox.allowed_host_roots if root]
+        if allowed_roots:
+            allowed_roots_line = f"You may read and write any project under the configured host roots: {', '.join(f'`{root}`' for root in allowed_roots)}."
+    except Exception:
+        pass
+    return f"""<project_context>
+- Current project root: `{project_root}`
+- Treat this directory as the default workspace context for the session unless the user specifies otherwise.
+- {allowed_roots_line}
+- If `{todo_path}` exists, read it first and keep it current while working; if it does not exist and the task is multi-step, create it.
+- If the task spans multiple steps, maintain `{todo_path}` as the live task list: add tasks, mark them `in_progress`, and complete them immediately when done.
+- When a milestone is finished and the tree is clean enough to ship, run `git status`, commit the change set, and push it to the tracked remote automatically unless git reports a missing remote or an authentication error.
+</project_context>
+"""
+
+
 def get_skills_prompt_section(available_skills: set[str] | None = None) -> str:
     """Generate the skills prompt section with available skills list.
 
@@ -507,6 +536,7 @@ def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagen
         skills_section=skills_section,
         deferred_tools_section=deferred_tools_section,
         memory_context=memory_context,
+        project_context=_get_project_context(),
         subagent_section=subagent_section,
         subagent_reminder=subagent_reminder,
         subagent_thinking=subagent_thinking,

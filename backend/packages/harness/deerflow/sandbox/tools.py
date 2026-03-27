@@ -1,3 +1,4 @@
+import os
 import posixpath
 import re
 from pathlib import Path
@@ -27,7 +28,6 @@ _LOCAL_BASH_SYSTEM_PATH_PREFIXES = (
 
 _DEFAULT_SKILLS_CONTAINER_PATH = "/mnt/skills"
 _ACP_WORKSPACE_VIRTUAL_PATH = "/mnt/acp-workspace"
-
 
 def _get_skills_container_path() -> str:
     """Get the skills container path from config, with fallback to default.
@@ -107,6 +107,44 @@ def _resolve_skills_path(path: str) -> str:
 def _is_acp_workspace_path(path: str) -> bool:
     """Check if a path is under the ACP workspace virtual path."""
     return path == _ACP_WORKSPACE_VIRTUAL_PATH or path.startswith(f"{_ACP_WORKSPACE_VIRTUAL_PATH}/")
+
+
+def _get_allowed_local_host_roots() -> list[Path]:
+    """Get additional host roots allowed for local sandbox file access.
+
+    These roots are intended for native/local execution where the sandbox runs
+    directly on the host and should be able to access trusted project trees.
+    """
+    try:
+        from deerflow.config import get_app_config
+
+        sandbox = get_app_config().sandbox
+        configured = getattr(sandbox, "allowed_host_roots", None) or []
+        roots = [Path(root).expanduser().resolve() for root in configured]
+        if roots:
+            return roots
+    except Exception:
+        pass
+
+    env_roots = os.getenv("DEER_FLOW_ALLOWED_HOST_ROOTS") or os.getenv("DEERFLOW_ALLOWED_HOST_ROOTS") or ""
+    roots = [Path(root.strip()).expanduser().resolve() for root in env_roots.split(",") if root.strip()]
+    return roots
+
+
+def _is_allowed_local_host_path(path: str) -> bool:
+    """Check if a path is under one of the configured allowed host roots."""
+    try:
+        resolved = Path(path).resolve()
+    except Exception:
+        return False
+
+    for root in _get_allowed_local_host_roots():
+        try:
+            resolved.relative_to(root)
+            return True
+        except ValueError:
+            continue
+    return False
 
 
 def _extract_thread_id_from_thread_data(thread_data: "ThreadDataState | None") -> str | None:
@@ -390,10 +428,11 @@ def validate_local_tool_path(path: str, thread_data: ThreadDataState | None, *, 
     path to a host path; callers are responsible for resolution via
     ``_resolve_and_validate_user_data_path`` or ``_resolve_skills_path``.
 
-    Allowed virtual-path families:
+    Allowed path families:
       - ``/mnt/user-data/*``  — always allowed (read + write)
       - ``/mnt/skills/*``     — allowed only when *read_only* is True
       - ``/mnt/acp-workspace/*`` — allowed only when *read_only* is True
+      - configured host roots such as the local workspace root(s) — allowed (read + write)
 
     Args:
         path: The virtual path to validate.
@@ -421,11 +460,18 @@ def validate_local_tool_path(path: str, thread_data: ThreadDataState | None, *, 
             raise PermissionError(f"Write access to ACP workspace is not allowed: {path}")
         return
 
+    if _is_allowed_local_host_path(path):
+        return
+
     # User-data paths
     if path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
         return
 
-    raise PermissionError(f"Only paths under {VIRTUAL_PATH_PREFIX}/, {_get_skills_container_path()}/, or {_ACP_WORKSPACE_VIRTUAL_PATH}/ are allowed")
+    allowed_roots = ", ".join(str(root) for root in _get_allowed_local_host_roots())
+    raise PermissionError(
+        f"Only paths under {VIRTUAL_PATH_PREFIX}/, {_get_skills_container_path()}/, "
+        f"{_ACP_WORKSPACE_VIRTUAL_PATH}/, or configured host roots ({allowed_roots}) are allowed"
+    )
 
 
 def _validate_resolved_user_data_path(resolved: Path, thread_data: ThreadDataState) -> None:
@@ -467,6 +513,25 @@ def _resolve_and_validate_user_data_path(path: str, thread_data: ThreadDataState
     return str(resolved)
 
 
+def _resolve_local_tool_path(path: str, thread_data: ThreadDataState | None) -> str:
+    """Resolve a path for local sandbox tools.
+
+    Virtual paths are translated to host paths. Configured trusted host roots
+    are returned as resolved absolute paths unchanged.
+    """
+    if _is_skills_path(path):
+        return _resolve_skills_path(path)
+    if _is_acp_workspace_path(path):
+        return _resolve_acp_workspace_path(path, _extract_thread_id_from_thread_data(thread_data))
+    if path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
+        if thread_data is None:
+            raise SandboxRuntimeError("Thread data not available for local sandbox")
+        return _resolve_and_validate_user_data_path(path, thread_data)
+    if _is_allowed_local_host_path(path):
+        return str(Path(path).resolve())
+    return path
+
+
 def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState | None) -> None:
     """Validate absolute paths in local-sandbox bash commands.
 
@@ -494,6 +559,10 @@ def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState
 
         # Allow ACP workspace path (path-traversal check only)
         if _is_acp_workspace_path(absolute_path):
+            _reject_path_traversal(absolute_path)
+            continue
+
+        if _is_allowed_local_host_path(absolute_path):
             _reject_path_traversal(absolute_path)
             continue
 
@@ -744,12 +813,7 @@ def ls_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, path:
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             validate_local_tool_path(path, thread_data, read_only=True)
-            if _is_skills_path(path):
-                path = _resolve_skills_path(path)
-            elif _is_acp_workspace_path(path):
-                path = _resolve_acp_workspace_path(path, _extract_thread_id_from_thread_data(thread_data))
-            else:
-                path = _resolve_and_validate_user_data_path(path, thread_data)
+            path = _resolve_local_tool_path(path, thread_data)
         children = sandbox.list_dir(path)
         if not children:
             return "(empty)"
@@ -787,12 +851,7 @@ def read_file_tool(
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             validate_local_tool_path(path, thread_data, read_only=True)
-            if _is_skills_path(path):
-                path = _resolve_skills_path(path)
-            elif _is_acp_workspace_path(path):
-                path = _resolve_acp_workspace_path(path, _extract_thread_id_from_thread_data(thread_data))
-            else:
-                path = _resolve_and_validate_user_data_path(path, thread_data)
+            path = _resolve_local_tool_path(path, thread_data)
         content = sandbox.read_file(path)
         if not content:
             return "(empty)"
@@ -833,7 +892,7 @@ def write_file_tool(
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             validate_local_tool_path(path, thread_data)
-            path = _resolve_and_validate_user_data_path(path, thread_data)
+            path = _resolve_local_tool_path(path, thread_data)
         sandbox.write_file(path, content, append)
         return "OK"
     except SandboxError as e:
@@ -874,7 +933,7 @@ def str_replace_tool(
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             validate_local_tool_path(path, thread_data)
-            path = _resolve_and_validate_user_data_path(path, thread_data)
+            path = _resolve_local_tool_path(path, thread_data)
         content = sandbox.read_file(path)
         if not content:
             return "OK"
