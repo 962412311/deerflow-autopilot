@@ -33,6 +33,12 @@ else
     FRONTEND_CMD="env BETTER_AUTH_SECRET=$(python3 -c 'import secrets; print(secrets.token_hex(16))') pnpm run preview"
 fi
 
+if $DEV_MODE; then
+    FRONTEND_TIMEOUT="$(./scripts/frontend-timeout.sh dev)"
+else
+    FRONTEND_TIMEOUT="$(./scripts/frontend-timeout.sh prod)"
+fi
+
 # ── Stop existing services ────────────────────────────────────────────────────
 
 echo "Stopping existing services if any..."
@@ -67,6 +73,7 @@ echo "Services starting up..."
 echo "  → Backend: LangGraph + Gateway"
 echo "  → Frontend: Next.js"
 echo "  → Nginx: Reverse Proxy"
+echo "  → Frontend startup timeout: ${FRONTEND_TIMEOUT}s"
 echo ""
 
 # ── Config check ─────────────────────────────────────────────────────────────
@@ -162,9 +169,15 @@ echo "✓ Gateway API started on localhost:8001"
 
 echo "Starting Frontend..."
 (cd frontend && $FRONTEND_CMD > ../logs/frontend.log 2>&1) &
-./scripts/wait-for-port.sh 3000 120 "Frontend" || {
+./scripts/wait-for-port.sh 3000 "$FRONTEND_TIMEOUT" "Frontend" || {
     echo "  See logs/frontend.log for details"
     tail -20 logs/frontend.log
+    if ! $DEV_MODE; then
+        echo ""
+        echo "  Hint: production frontend startup runs \`next build && next start\`."
+        echo "  On WSL, the first optimized build can take several minutes."
+        echo "  You can increase the limit with DEER_FLOW_FRONTEND_TIMEOUT or DEER_FLOW_FRONTEND_TIMEOUT_PROD."
+    fi
     cleanup
 }
 echo "✓ Frontend started on localhost:3000"
